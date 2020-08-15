@@ -1,25 +1,24 @@
-#include <Arduino.h>
-#include <Arduino.h>
 #include <SPI.h>
 #include "SensorDHT22.h"
 
-SensorDHT22::SensorDHT22(int pin)
+SensorDHT22::SensorDHT22(uint8_t pin)
 {
     _pin = pin;
 }
 
 void SensorDHT22::init()
 {
+    pinMode(_pin, INPUT);
     _dht = new DHT(_pin, DHT22);
     _dht->begin();
 }
 
-float SensorDHT22::getTemp()
+int8_t SensorDHT22::getTemp()
 {
-    return _dht->readTemperature();
+    return static_cast<int8_t>(_dht->readTemperature());
 }
 
-float SensorDHT22::getHumi()
+int8_t SensorDHT22::getHumi()
 {
-    return _dht->readHumidity();
+    return static_cast<int8_t>(_dht->readHumidity());
 }
