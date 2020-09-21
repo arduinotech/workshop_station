@@ -1,6 +1,6 @@
 # Climat control module
 
-<F3>![Arduino alarm clock schema](https://raw.githubusercontent.com/arduinotech/stand-workshop_station/master/schema.png)
+<F3>![Arduino alarm clock schema](https://raw.githubusercontent.com/arduinotech/workshop_station/master/schema.png)
   
 Project page on my website: [https://arduino-technology.ru/projects/climat-control/](https://arduino-technology.ru/projects/climat-control/)
 
