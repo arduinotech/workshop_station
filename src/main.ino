@@ -69,7 +69,7 @@ void loop()
   static uint32_t lastButtonClick = 0;
   static uint8_t lastHourSaveData = 200;
 
-  static int8_t climatControlTemperature = 20;
+  static int8_t climatControlTemperature = INIT_CLIMAT_CONTROL_TEMPERATURE;
 
   static String hours[10] = {"  ", "  ", "  ", "  ", "  ", "  ", "  ", "  ", "  ", "  "};
   static String temps[10] = {"  ", "  ", "  ", "  ", "  ", "  ", "  ", "  ", "  ", "  "};
