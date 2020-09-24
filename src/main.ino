@@ -75,7 +75,12 @@ void loop()
   static String temps[10] = {"  ", "  ", "  ", "  ", "  ", "  ", "  ", "  ", "  ", "  "};
   static String humis[10] = {"  ", "  ", "  ", "  ", "  ", "  ", "  ", "  ", "  ", "  "};
 
+  static String onOff[12] = {"     ", "     ", "     ", "     ", "     ", "     ", "     ", "     ", "     ", "     ", "     ", "     "};
+  static uint8_t currentOnOff = 0;
+
   static bool heaterIsOn = false;
+
+  static bool showOnOffTimes = false;
 
   if (lastRefresh > now) {
     lastRefresh = 0;
@@ -89,105 +94,144 @@ void loop()
 
 
   if ((now - lastButtonClick) > BUTTON_CLICK_INTERVAL) {
-    int buttonUp = digitalRead(BUTTON_UP_PIN);
-    if (buttonUp == LOW) {
-      climatControlTemperature++;
-      if (heaterIsOn) {
-        // выключаем реле
-        digitalWrite(RELAY_PIN, HIGH);
-        heaterIsOn = false;
-      }
-      mustRefreshIfButtonClick = true;
-      lastButtonClick = now;
-    }
+    tmElements_t tm;
+    if (RTC.read(tm)) {
+      String time = String((tm.Hour < 10) ? "0" : "") + String(tm.Hour) + String(":") + String((tm.Minute < 10) ? "0" : "") + String(tm.Minute);
 
-    int buttonDown = digitalRead(BUTTON_DOWN_PIN);
-    if (buttonDown == LOW) {
-      climatControlTemperature--;
-      if (heaterIsOn) {
-        // выключаем реле
-        digitalWrite(RELAY_PIN, HIGH);
-        heaterIsOn = false;
+      int buttonUp = digitalRead(BUTTON_UP_PIN);
+      if (buttonUp == LOW) {
+        climatControlTemperature++;
+        if (heaterIsOn) {
+          // выключаем реле
+          digitalWrite(RELAY_PIN, HIGH);
+          heaterIsOn = false;
+          saveOnOffValue(currentOnOff, onOff, time);
+        }
+        mustRefreshIfButtonClick = true;
+        lastButtonClick = now;
       }
-      mustRefreshIfButtonClick = true;
-      lastButtonClick = now;
+
+      int buttonDown = digitalRead(BUTTON_DOWN_PIN);
+      if (buttonDown == LOW) {
+        climatControlTemperature--;
+        if (heaterIsOn) {
+          // выключаем реле
+          digitalWrite(RELAY_PIN, HIGH);
+          heaterIsOn = false;
+          saveOnOffValue(currentOnOff, onOff, time);
+        }
+        mustRefreshIfButtonClick = true;
+        lastButtonClick = now;
+      }
     }
   }
 
-
   if (((now - lastRefresh) > REFRESH_INTERVAL) || mustRefreshIfButtonClick) {
-    int8_t temp = dht22Sensor.getTemp();
-    int8_t humi = dht22Sensor.getHumi();
-    refresh(lastHourSaveData, climatControlTemperature, hours, temps, humis, temp, humi);
-    lastRefresh = now;
+    tmElements_t tm;
+    if (RTC.read(tm)) {
+      String time = String((tm.Hour < 10) ? "0" : "") + String(tm.Hour) + String(":") + String((tm.Minute < 10) ? "0" : "") + String(tm.Minute);
 
-    if ((temp >= (climatControlTemperature + 1)) && heaterIsOn) {
-      // выключаем реле
-      digitalWrite(RELAY_PIN, HIGH);
-      heaterIsOn = false;
-    }
+      int8_t temp = dht22Sensor.getTemp();
+      int8_t humi = dht22Sensor.getHumi();
+      refresh(lastHourSaveData, climatControlTemperature, hours, temps, humis, temp, humi, tm, onOff, showOnOffTimes);
+      lastRefresh = now;
 
-    if ((temp <= (climatControlTemperature - 1)) && !heaterIsOn) {
-      // включаем реле
-      digitalWrite(RELAY_PIN, LOW);
-      heaterIsOn = true;
+      if ((temp >= (climatControlTemperature + 1)) && heaterIsOn) {
+        // выключаем реле
+        digitalWrite(RELAY_PIN, HIGH);
+        heaterIsOn = false;
+        saveOnOffValue(currentOnOff, onOff, time);
+      }
+
+      if ((temp <= (climatControlTemperature - 1)) && !heaterIsOn) {
+        // включаем реле
+        digitalWrite(RELAY_PIN, LOW);
+        heaterIsOn = true;
+        saveOnOffValue(currentOnOff, onOff, time);
+      }
     }
   }
 }
 
-void refresh(uint8_t &lastHourSaveData, int8_t climatControlTemperature, String hours[], String temps[], String humis[], int8_t temp, int8_t humi)
-{
-  tmElements_t tm;
+void refresh(
+  uint8_t &lastHourSaveData,
+  int8_t climatControlTemperature,
+  String hours[],
+  String temps[],
+  String humis[],
+  int8_t temp,
+  int8_t humi,
+  tmElements_t tm,
+  String onOff[],
+  bool &showOnOffTimes
+) {
   String time = String("00:00");
   String date = String("00/00");
 
   String tempStr = String(temp);
   String humiStr = String(humi);
 
-  if (RTC.read(tm)) {
-    time = String((tm.Hour < 10) ? "0" : "") + String(tm.Hour) + String(":") + String((tm.Minute < 10) ? "0" : "") + String(tm.Minute);
-    date = String((tm.Day < 10) ? "0" : "") + String(tm.Day) + String("/") + String((tm.Month < 10) ? "0" : "") + String(tm.Month);
+  time = String((tm.Hour < 10) ? "0" : "") + String(tm.Hour) + String(":") + String((tm.Minute < 10) ? "0" : "") + String(tm.Minute);
+  date = String((tm.Day < 10) ? "0" : "") + String(tm.Day) + String("/") + String((tm.Month < 10) ? "0" : "") + String(tm.Month);
 
-    if ((tm.Hour % 2 == 0) && (tm.Hour != lastHourSaveData)) {
-      for (int i = 0; i < 9; i++) {
-        hours[i] = hours[i + 1];
-        temps[i] = temps[i + 1];
-        humis[i] = humis[i + 1];
-      }
-      hours[9] = String((tm.Hour < 10) ? "0" : "") + String(tm.Hour);
-
-      String temp2Digits = tempStr.substring(0, 2);
-      if (temp2Digits.length() == 1) {
-        temp2Digits = String(" ") + temp2Digits;
-      }
-
-      String humi2Digits = humiStr.substring(0, 2);
-      if (humi2Digits.length() == 1) {
-        humi2Digits = String(" ") + humi2Digits;
-      }
-
-      temps[9] = temp2Digits;
-      humis[9] = humi2Digits;
-
-      lastHourSaveData = tm.Hour;
+  if ((tm.Hour % 2 == 0) && (tm.Hour != lastHourSaveData)) {
+    for (uint8_t i = 0; i < 9; i++) {
+      hours[i] = hours[i + 1];
+      temps[i] = temps[i + 1];
+      humis[i] = humis[i + 1];
     }
+    hours[9] = String((tm.Hour < 10) ? "0" : "") + String(tm.Hour);
+
+    String temp2Digits = tempStr.substring(0, 2);
+    if (temp2Digits.length() == 1) {
+      temp2Digits = String(" ") + temp2Digits;
+    }
+
+    String humi2Digits = humiStr.substring(0, 2);
+    if (humi2Digits.length() == 1) {
+      humi2Digits = String(" ") + humi2Digits;
+    }
+
+    temps[9] = temp2Digits;
+    humis[9] = humi2Digits;
+
+    lastHourSaveData = tm.Hour;
   }
 
   display->showText(time + String(" ") + date + " " + temp + String(" ") + humi + String(" ") + String(climatControlTemperature), 0);
 
-  String hoursString = String("");
-  String tempsString = String("");
-  String humisString = String("");
+  if (showOnOffTimes) {
+    display->showText(onOff[0] + onOff[1] + onOff[2] + onOff[3], 1);
+    display->showText(onOff[4] + onOff[5] + onOff[6] + onOff[7], 2);
+    display->showText(onOff[8] + onOff[9] + onOff[10] + onOff[11], 3);
+  } else {
+    String hoursString = String("");
+    String tempsString = String("");
+    String humisString = String("");
 
-  for (int i = 0; i < 10; i++) {
-    hoursString += hours[i];
-    tempsString += temps[i];
-    humisString += humis[i];
+    for (uint8_t i = 0; i < 10; i++) {
+      hoursString += hours[i];
+      tempsString += temps[i];
+      humisString += humis[i];
+    }
+    display->showText(hoursString, 1);
+    display->showText(tempsString, 2);
+    display->showText(humisString, 3);
   }
-  display->showText(hoursString, 1);
-  display->showText(tempsString, 2);
-  display->showText(humisString, 3);
+  showOnOffTimes = !showOnOffTimes;
+}
 
-
-
+void saveOnOffValue(uint8_t &currentOnOff, String onOff[], String value)
+{
+  if (currentOnOff < 12) {
+    onOff[currentOnOff] = value;
+    currentOnOff++;
+  } else {
+    for (uint8_t i = 0; i < 10; i++) {
+      onOff[i] = onOff[i + 2];
+    }
+    onOff[10] = value;
+    onOff[11] = "     ";
+    currentOnOff = 11;
+  }
 }
